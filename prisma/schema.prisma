@@ -1,0 +1,455 @@
+// ==========================================
+// FLAG FOOTBALL MANAGER — Schéma BDD
+// Bible v2 — Prisma + PostgreSQL
+// ==========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// AUTHENTIFICATION
+// ==========================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  gameProfile   GameProfile?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ==========================================
+// PROFIL JOUEUR (le Head Coach)
+// ==========================================
+
+model GameProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clubId      String?  @unique
+  club        Club?    @relation(fields: [clubId], references: [id])
+  gold        Int      @default(10000)
+  gems        Int      @default(0)
+  currentDate Json
+  seasonPhase String   @default("PRE_SEASON")
+  news        NewsEntry[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==========================================
+// CLUBS
+// ==========================================
+
+model Club {
+  id            String      @id @default(cuid())
+  name          String
+  country       String
+  region        String
+  conference    String
+  division      String
+  notoriety     Int         @default(10)
+  reputation    Int         @default(50)
+  gold          Int         @default(10000)
+  maxRosterSize Int         @default(20)
+  maxSponsors   Int         @default(1)
+
+  players       Player[]
+  staff         StaffMember[]
+  infrastructure Infrastructure[]
+  sponsors      ClubSponsor[]
+  homeMatches   Match[]     @relation("HomeTeam")
+  awayMatches   Match[]     @relation("AwayTeam")
+  standings     Standing[]
+  history       ClubSeasonHistory[]
+  trophies      Trophy[]
+  retiredJerseys RetiredJersey[]
+  gameProfile   GameProfile?
+
+  isPlayerControlled Boolean @default(false)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// ==========================================
+// JOUEURS
+// ==========================================
+
+model Player {
+  id                String    @id @default(cuid())
+  firstName         String
+  lastName          String
+  age               Int
+  country           String
+  region            String
+
+  primaryPosition   String
+  secondaryPosition String?
+
+  speed             Int       @default(10)
+  agility           Int       @default(10)
+  strength          Int       @default(10)
+  intelligence      Int       @default(10)
+  endurance         Int       @default(10)
+  throwing          Int       @default(10)
+  catching          Int       @default(10)
+  mental            Int       @default(10)
+
+  level             Int       @default(1)
+  xp                Int       @default(0)
+  xpToNextLevel     Int       @default(150)
+
+  skillSlots        Int       @default(1)
+  hasPremiumSlot    Boolean   @default(false)
+  skills            PlayerSkill[]
+
+  equipment         PlayerEquipment[]
+
+  fatigue           Int       @default(0)
+  morale            Int       @default(70)
+  injuryType        String    @default("NONE")
+  injuryWeeksLeft   Int       @default(0)
+
+  traits            String[]
+
+  contractWeeksLeft Int       @default(52)
+  weeklySalary      Int       @default(50)
+
+  clubId            String?
+  club              Club?     @relation(fields: [clubId], references: [id])
+  isInMatchSquad    Boolean   @default(false)
+  isStarter         Boolean   @default(false)
+
+  personalSponsor   PersonalSponsor?
+
+  careerStats       CareerStat?
+  clubHistory       PlayerClubHistory[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// ==========================================
+// COMPÉTENCES (TECHNIQUES)
+// ==========================================
+
+model Skill {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  type        String
+  description String
+  effectJson  Json
+  players     PlayerSkill[]
+}
+
+model PlayerSkill {
+  id       String @id @default(cuid())
+  playerId String
+  skillId  String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  skill    Skill  @relation(fields: [skillId], references: [id])
+
+  @@unique([playerId, skillId])
+}
+
+// ==========================================
+// ÉQUIPEMENT
+// ==========================================
+
+model Equipment {
+  id        String            @id @default(cuid())
+  name      String
+  slot      String
+  rarity    String
+  statsJson Json
+  players   PlayerEquipment[]
+}
+
+model PlayerEquipment {
+  id          String    @id @default(cuid())
+  playerId    String
+  equipmentId String
+  slot        String
+  player      Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+
+  @@unique([playerId, slot])
+}
+
+// ==========================================
+// STATS DE CARRIÈRE
+// ==========================================
+
+model CareerStat {
+  id                    String @id @default(cuid())
+  playerId              String @unique
+  player                Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  matchesPlayed         Int    @default(0)
+  wins                  Int    @default(0)
+  losses                Int    @default(0)
+  touchdowns            Int    @default(0)
+  passingTDs            Int    @default(0)
+  yardsRushing          Int    @default(0)
+  yardsReceiving        Int    @default(0)
+  interceptionsMade     Int    @default(0)
+  interceptionsSuffered Int    @default(0)
+  flagPulls             Int    @default(0)
+  completionAttempts    Int    @default(0)
+  completionSuccesses   Int    @default(0)
+}
+
+model PlayerClubHistory {
+  id           String  @id @default(cuid())
+  playerId     String
+  player       Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  clubName     String
+  seasonsPlayed Int
+  fromYear     Int
+  toYear       Int?
+}
+
+// ==========================================
+// STAFF
+// ==========================================
+
+model StaffMember {
+  id                String @id @default(cuid())
+  name              String
+  role              String
+  stars             Int    @default(1)
+  weeklySalary      Int
+  contractWeeksLeft Int
+  clubId            String
+  club              Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// INFRASTRUCTURE
+// ==========================================
+
+model Infrastructure {
+  id          String @id @default(cuid())
+  type        String
+  level       Int    @default(1)
+  upgradeCost Int
+  clubId      String
+  club        Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, type])
+}
+
+// ==========================================
+// SPONSORS
+// ==========================================
+
+model ClubSponsor {
+  id                String @id @default(cuid())
+  name              String
+  type              String
+  weeklyIncome      Int
+  objectiveJson     Json
+  contractWeeksLeft Int
+  clubId            String
+  club              Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+model PersonalSponsor {
+  id                String @id @default(cuid())
+  name              String
+  objectiveJson     Json
+  rewardJson        Json
+  contractWeeksLeft Int
+  playerId          String @unique
+  player            Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// MATCHS
+// ==========================================
+
+model Match {
+  id             String      @id @default(cuid())
+  homeTeamId     String
+  awayTeamId     String
+  homeTeam       Club        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam       Club        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  weather        String
+  scoreHome      Int         @default(0)
+  scoreAway      Int         @default(0)
+  isCompleted    Boolean     @default(false)
+  matchType      String      @default("LEAGUE")
+  playsJson      Json?
+  seasonYear     Int
+  weekNumber     Int
+  gameDate       Json
+
+  createdAt      DateTime    @default(now())
+}
+
+// ==========================================
+// CLASSEMENT
+// ==========================================
+
+model Standing {
+  id            String @id @default(cuid())
+  clubId        String
+  club          Club   @relation(fields: [clubId], references: [id])
+  seasonYear    Int
+  division      String
+  conference    String
+  region        String
+  wins          Int    @default(0)
+  losses        Int    @default(0)
+  pointsFor     Int    @default(0)
+  pointsAgainst Int    @default(0)
+  streak        Int    @default(0)
+
+  @@unique([clubId, seasonYear])
+}
+
+// ==========================================
+// HISTORIQUE & RECORDS
+// ==========================================
+
+model ClubSeasonHistory {
+  id          String   @id @default(cuid())
+  clubId      String
+  club        Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  year        Int
+  division    String
+  position    Int
+  wins        Int
+  losses      Int
+  trophiesWon String[]
+
+  @@unique([clubId, year])
+}
+
+model Trophy {
+  id     String @id @default(cuid())
+  name   String
+  year   Int
+  type   String
+  clubId String
+  club   Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+model RetiredJersey {
+  id              String @id @default(cuid())
+  number          Int
+  playerName      String
+  years           String
+  careerStatsJson Json
+  clubId          String
+  club            Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+model GameRecord {
+  id         String @id @default(cuid())
+  category   String
+  value      Int
+  playerName String
+  clubName   String
+  year       Int
+  scope      String
+}
+
+model HallOfFame {
+  id             String @id @default(cuid())
+  playerName     String
+  inductionYear  Int
+  careerStatsJson Json
+  clubs          String[]
+  trophiesJson   Json
+}
+
+// ==========================================
+// JOURNAL D'ACTUALITÉS
+// ==========================================
+
+model NewsEntry {
+  id            String      @id @default(cuid())
+  gameProfileId String
+  gameProfile   GameProfile @relation(fields: [gameProfileId], references: [id], onDelete: Cascade)
+  gameDate      Json
+  title         String
+  content       String
+  type          String
+  createdAt     DateTime    @default(now())
+}
+
+// ==========================================
+// ENTRAÎNEMENT
+// ==========================================
+
+model TrainingLog {
+  id          String   @id @default(cuid())
+  type        String
+  intensity   String
+  playerId    String?
+  clubId      String
+  xpGained    Int
+  statBoosts  Json
+  injuryOccurred Boolean @default(false)
+  gameDate    Json
+  createdAt   DateTime @default(now())
+}
+
+// ==========================================
+// PRÉSIDENT
+// ==========================================
+
+model President {
+  id              String @id @default(cuid())
+  name            String
+  clubId          String @unique
+  objectiveJson   Json
+  patience        Int    @default(3)
+  failedSeasons   Int    @default(0)
+}
