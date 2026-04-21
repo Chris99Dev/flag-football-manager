@@ -1,76 +1,82 @@
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { ClubHeader } from "@/components/dashboard/ClubHeader";
+import { QuickNav } from "@/components/dashboard/QuickNav";
+import { RosterPreview } from "@/components/dashboard/RosterPreview";
+import { NewsFeed } from "@/components/dashboard/NewsFeed";
 
 export default async function DashboardPage() {
   const session = await auth();
 
-  if (!session?.user) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
+  // Récupérer le GameProfile avec le club, les joueurs et les news
+  const gameProfile = await prisma.gameProfile.findUnique({
+    where: { userId: session.user.id },
+    include: {
+      club: {
+        include: {
+          players: {
+            orderBy: [
+              { primaryPosition: "asc" },
+              { level: "desc" },
+            ],
+          },
+        },
+      },
+      news: {
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+    },
+  });
+
+  // Si pas de GameProfile → onboarding
+  if (!gameProfile || !gameProfile.club) {
+    redirect("/onboarding");
+  }
+
+  const club = gameProfile.club;
+  const currentDate = gameProfile.currentDate as {
+    year: number;
+    month: number;
+    week: number;
+    day: number;
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-blue-900 text-white shadow-lg">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Flag Football Manager</h1>
-          <div className="flex items-center gap-4">
-            {session.user.image && (
-              <img
-                src={session.user.image}
-                alt={session.user.name || "User"}
-                className="w-10 h-10 rounded-full border-2 border-white"
-              />
-            )}
-            <div className="text-right">
-              <p className="font-semibold">{session.user.name}</p>
-              <p className="text-sm text-blue-200">{session.user.email}</p>
-            </div>
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/" });
-              }}
-            >
-              <button
-                type="submit"
-                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold transition-colors"
-              >
-                Déconnexion
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+      {/* Header du club */}
+      <ClubHeader
+        clubName={club.name}
+        country={club.country}
+        division={club.division}
+        conference={club.conference}
+        region={club.region}
+        gold={gameProfile.gold}
+        notoriety={club.notoriety}
+        reputation={club.reputation}
+        currentDate={currentDate}
+        seasonPhase={gameProfile.seasonPhase}
+        userName={session.user.name || "Coach"}
+        userImage={session.user.image || null}
+      />
 
-      <main className="container mx-auto px-4 py-12">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-blue-900 mb-4">
-            Bienvenue, {session.user.name} !
-          </h2>
-          <p className="text-gray-600 mb-6">
-            Authentification réussie. Tu es connecté avec ton compte Google.
-          </p>
-
-          <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
-            <p className="text-green-800 font-semibold">
-              ✓ NextAuth fonctionne correctement
-            </p>
-            <p className="text-green-700 text-sm mt-1">
-              Prochaine étape : créer ton club et choisir ton pays
-            </p>
+      {/* Contenu principal */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Colonne gauche : Navigation + News */}
+          <div className="lg:col-span-1 space-y-6">
+            <QuickNav />
+            <NewsFeed news={gameProfile.news} />
           </div>
 
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-bold text-blue-900 mb-2">User ID</h3>
-              <p className="text-sm text-gray-600 font-mono break-all">
-                {session.user.id}
-              </p>
-            </div>
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-bold text-blue-900 mb-2">Email</h3>
-              <p className="text-sm text-gray-600">{session.user.email}</p>
-            </div>
+          {/* Colonne droite : Roster */}
+          <div className="lg:col-span-2">
+            <RosterPreview players={club.players} />
           </div>
         </div>
       </main>
